@@ -15,11 +15,12 @@ import (
 
 // Attacker is an attack executor which wraps an http.Client
 type Attacker struct {
-	dialer    *net.Dialer
-	client    http.Client
-	stopch    chan struct{}
-	workers   uint64
-	redirects int
+	dialer              *net.Dialer
+	client              http.Client
+	stopch              chan struct{}
+	workers             uint64
+	redirects           int
+	responseBodyHandler func(io.Reader) (int64, error)
 }
 
 const (
@@ -64,12 +65,21 @@ func NewAttacker(opts ...func(*Attacker)) *Attacker {
 			MaxIdleConnsPerHost:   DefaultConnections,
 		},
 	}
+	a.responseBodyHandler = func(r io.Reader) (int64, error) {
+		return io.Copy(ioutil.Discard, r)
+	}
 
 	for _, opt := range opts {
 		opt(a)
 	}
 
 	return a
+}
+
+func ResponseBodyHandler(h func(io.Reader) (int64, error)) func(*Attacker) {
+	return func(a *Attacker) {
+		a.responseBodyHandler = h
+	}
 }
 
 // Workers returns a functional option which sets the initial number of workers
@@ -248,7 +258,8 @@ func (a *Attacker) hit(tr Targeter, tm time.Time) *Result {
 	}
 	defer r.Body.Close()
 
-	in, err := io.Copy(ioutil.Discard, r.Body)
+
+	in, err := a.responseBodyHandler(r.Body)
 	if err != nil {
 		return &res
 	}
