@@ -20,7 +20,7 @@ type Attacker struct {
 	stopch              chan struct{}
 	workers             uint64
 	redirects           int
-	responseBodyHandler func(io.Reader) (int64, error)
+	responseBodyHandler func(*http.Response, io.Reader) (int64, error)
 }
 
 const (
@@ -65,7 +65,7 @@ func NewAttacker(opts ...func(*Attacker)) *Attacker {
 			MaxIdleConnsPerHost:   DefaultConnections,
 		},
 	}
-	a.responseBodyHandler = func(r io.Reader) (int64, error) {
+	a.responseBodyHandler = func(resp *http.Response, r io.Reader) (int64, error) {
 		return io.Copy(ioutil.Discard, r)
 	}
 
@@ -76,7 +76,7 @@ func NewAttacker(opts ...func(*Attacker)) *Attacker {
 	return a
 }
 
-func ResponseBodyHandler(h func(io.Reader) (int64, error)) func(*Attacker) {
+func ResponseBodyHandler(h func(*http.Response, io.Reader) (int64, error)) func(*Attacker) {
 	return func(a *Attacker) {
 		a.responseBodyHandler = h
 	}
@@ -259,7 +259,7 @@ func (a *Attacker) hit(tr Targeter, tm time.Time) *Result {
 	defer r.Body.Close()
 
 
-	in, err := a.responseBodyHandler(r.Body)
+	in, err := a.responseBodyHandler(r,  r.Body)
 	if err != nil {
 		return &res
 	}
